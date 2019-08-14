@@ -11,42 +11,55 @@ static int GetAllignedValue(int value, int allignment) {
 	return (((value / allignment) + 1) * allignment);
 }
 
+#define __default_compare(a, b) (a > b)
+
 /*****************************************************************************/
 /* Used to determine the template type of a vector_t structure               */
 /*****************************************************************************/
-#define VEC_T(this) typeof(*(*this).data)
+#define _T(this) typeof(*(*this).data)
 
 #define VECTOR_DEFAULT_CAPACITY	8
 
-#define vector_t(T) struct {							\
-	unsigned int size;							\
-	unsigned int capacity;							\
-	T* data;								\
+#define vector_t(T) struct {                                                  \
+	unsigned int size;                                                    \
+	unsigned int capacity;                                                \
+	T* data;                                                              \
+	void (*init)(void*);                                                  \
 }
 
-#define vector_reserve(this, newcapacity)					\
-{										\
-	if ((this)->capacity < (newcapacity)) {					\
-		VEC_T(this)* newData = (VEC_T(this)*)malloc((newcapacity));	\
-		memcpy(newData, (this)->data, (this)->size);			\
-		free((this)->data);						\
-		(this)->capacity = (newcapacity);				\
-		(this)->data = newData;						\
-	}									\
+#define new_vector_2(T, cap) {0, (cap), ((cap) > 0)?                          \
+			(T*)malloc(sizeof(T) * (cap)) : (T*)NULL, NULL}
+
+#define new_vector_1(T) new_vector_2(T, VECTOR_DEFAULT_CAPACITY)
+/*****************************************************************************/
+/* Helper functions. Allows for function overloading.                        */
+/* Can be used with or without a specific capacity                           */
+/*****************************************************************************/
+#define new_vector(...) VFUNC(new_vector_, __VA_ARGS__)
+
+#define vector_reserve(this, newcapacity)                                     \
+{                                                                             \
+	if ((this)->capacity < (newcapacity)) {                               \
+		_T(this)* newData = (_T(this)*)malloc((newcapacity));         \
+		memcpy(newData, (this)->data, (this)->size);                  \
+		free((this)->data);                                           \
+		(this)->capacity = (newcapacity);                             \
+		(this)->data = newData;                                       \
+	}                                                                     \
 }
 
 /*****************************************************************************/
 /* Initialize an object of type vector_t with a specific capacity reserved   */
 /*****************************************************************************/
-#define vector_init_2(this, pcapacity)						\
-{										\
-	(this)->size = 0;							\
-	(this)->capacity = (pcapacity);						\
-	if ((this)->capacity > 0) {						\
-		(this)->data = (VEC_T(this)*)malloc(				\
-				sizeof(VEC_T(this)) * (this)->capacity);	\
-	}									\
-}										\
+#define vector_init_2(this, pcapacity)                                        \
+{                                                                             \
+	(this)->size = 0;                                                     \
+	(this)->capacity = (pcapacity);                                       \
+	if ((this)->capacity > 0) {                                           \
+		(this)->data = (_T(this)*)malloc(                             \
+				sizeof(_T(this)) * (this)->capacity);         \
+	}                                                                     \
+}                                                                             \
 
 /*****************************************************************************/
 /* Initialize an object of type vector_t with a default(8) capacity reserved */
@@ -62,12 +75,12 @@ static int GetAllignedValue(int value, int allignment) {
 /*****************************************************************************/
 /* Free up memory used internally by the vector_t object                     */
 /*****************************************************************************/
-#define vector_uninit(this)							\
-{										\
-	(this)->size = 0;							\
-	(this)->capacity = 0;							\
-	if (((this)->data)) free((this)->data);					\
-	(this)->data = NULL;							\
+#define vector_uninit(this)                                                   \
+{                                                                             \
+	(this)->size = 0;                                                     \
+	(this)->capacity = 0;                                                 \
+	if (((this)->data)) free((this)->data);                               \
+	(this)->data = NULL;                                                  \
 }
 
 /*****************************************************************************/
@@ -83,39 +96,44 @@ static int GetAllignedValue(int value, int allignment) {
 /*****************************************************************************/
 /* Returns the entry found at a specific index                               */
 /*****************************************************************************/
-#define vector_get(this, index) ((const VEC_T(this))(this)->data[index])
+#define vector_get(this, index) ((const _T(this))(this)->data[index])
 
 /*****************************************************************************/
 /* Insert an array of the same type into the vector                          */
 /*****************************************************************************/
-#define vector_insert_3(this, begin, end)					\
-{										\
-	int i;									\
-	const unsigned int length = (end) - (begin);				\
-	const unsigned int newSize = (this)->size + length;			\
-	if (newSize >= (this)->capacity) {					\
-		unsigned int allignedValue = GetAllignedValue(newSize, 8);	\
-		VEC_T(this)* newData = malloc(					\
-					sizeof(VEC_T(this)) * allignedValue);	\
-		(this)->capacity = allignedValue;				\
-		for (i = 0; i < newSize; ++i) {					\
-			newData[i] = (i < (this)->size) ? 			\
-				(this)->data[i] : (begin)[i - (this)->size];	\
-		}								\
-		free((this)->data);						\
-		(this)->data = newData;						\
-	} else {								\
-		for (i = (this)->size; i < newSize; ++i) {			\
-			(this)->data[i] = (begin)[i - (this)->size];		\
-		}								\
-	}									\
-	(this)->size = newSize;							\
+#define vector_insert_3(this, begin, end)                                     \
+{                                                                             \
+	int i;                                                                \
+	const unsigned int length = (end) - (begin);                          \
+	const unsigned int newSize = (this)->size + length;                   \
+	if (newSize >= (this)->capacity)                                      \
+	{                                                                     \
+		unsigned int allignedValue = GetAllignedValue(newSize, 8);    \
+		_T(this)* newData = malloc(                                   \
+					sizeof(_T(this)) * allignedValue);    \
+		(this)->capacity = allignedValue;                             \
+		for (i = 0; i < newSize; ++i)                                 \
+		{                                                             \
+			newData[i] = (i < (this)->size) ?                     \
+				(this)->data[i] : (begin)[i - (this)->size];  \
+		}                                                             \
+		free((this)->data);                                           \
+		(this)->data = newData;                                       \
+	}                                                                     \
+	else                                                                  \
+	{								      \
+		for (i = (this)->size; i < newSize; ++i)                      \
+		{                                                             \
+			(this)->data[i] = (begin)[i - (this)->size];          \
+		}                                                             \
+	}                                                                     \
+	(this)->size = newSize;                                               \
 }
 
 /*****************************************************************************/
 /* Insert other vector data into this vector.                                */
 /*****************************************************************************/
-#define vector_insert_2(this, other)						\
+#define vector_insert_2(this, other)                                          \
               vector_insert_3((this), vector_begin(other), vector_end(other));
 
 /*****************************************************************************/
@@ -127,72 +145,93 @@ static int GetAllignedValue(int value, int allignment) {
 /*****************************************************************************/
 /* Removes a number of consecutive entryes from the vector                   */
 /*****************************************************************************/
-#define vector_remove(this, begin, count)					\
-{										\
-	if ((count) > 0) {							\
-		int i;								\
-		const int newSize = (this)->size - (count);			\
-		if (newSize >= 0) {						\
-			for (i = 0; i < (count); ++i) {				\
-				(this)->data[(begin) + i] = 			\
-					(this)->data[(begin) + (count) + i];	\
-			}							\
-			(this)->size = newSize;					\
-		}								\
-	}									\
+#define vector_remove(this, begin, count)                                     \
+{                                                                             \
+	if ((count) > 0) {                                                    \
+		int i;                                                        \
+		const int newSize = (this)->size - (count);                   \
+		if (newSize >= 0) {                                           \
+			for (i = 0; i < (count); ++i)                         \
+			{                                                     \
+				(this)->data[(begin) + i] =                   \
+					(this)->data[(begin) + (count) + i];  \
+			}                                                     \
+			(this)->size = newSize;                               \
+		}                                                             \
+	}                                                                     \
 }
 
-#define vector_push_back(this, value) 						\
-{										\
-	const VEC_T(this) tmp = (value);						\
-	const VEC_T(this)* ptmp = &tmp;						\
-	vector_insert((this), ptmp, ptmp + 1);					\
+#define vector_push_back(this, value)                                         \
+{                                                                             \
+	const _T(this) tmp = (value);                                         \
+	const _T(this)* ptmp = &tmp;                                          \
+	vector_insert((this), ptmp, ptmp + 1);                                \
 }
 
-#define vector_pop_back(this, value)						\
-{										\
-	if ((this)->size == 0) {						\
-		*(value) = (VEC_T(this))0;					\
-	} else {								\
-		*(value) = (this)->data[(this)->size - 1];			\
-		vector_remove((this), (this)->size - 1, 1);			\
-	}									\
+#define vector_pop_back(this, value)                                          \
+{                                                                             \
+	if ((this)->size == 0) {                                              \
+		*(value) = (_T(this))0;                                       \
+	}                                                                     \
+	else                                                                  \
+	{                                                                     \
+		*(value) = (this)->data[(this)->size - 1];                    \
+		vector_remove((this), (this)->size - 1, 1);                   \
+	}                                                                     \
 }
 
 /*****************************************************************************/
 /* Set an entry value by index                                               */
 /*****************************************************************************/
-#define vector_set(this, index, value)						\
-{										\
-	if ((index) < (this)->size) {						\
-		(this)->data[(index)] = (VEC_T(this))(value);			\
-	}		
+#define vector_set(this, index, value)                                        \
+{                                                                             \
+	if ((index) < (this)->size)                                           \
+	{                                                                     \
+		(this)->data[(index)] = (_T(this))(value);                    \
+	}                                                                     \
 }
 
-#define vector_begin(this) ((const VEC_T(this)*)((this)->data))
-#define vector_end(this) ((const VEC_T(this)*)(&((this)->data[(this)->size])))
-#define vector_clear(this)							\
-	{									\
-	(this)->size = 0;							\
-	}
+#define vector_begin(this) ((_T(this)*)((this)->data))
 
-#define vector_sort(this, compare)						\
-	{									\
-	int loop = 0;							\
-	int index = 0;								\
-	VEC_T(this) tmp;							\
-	do {									\
-		loop = 0;							\
-		for (index = 0; index < vector_size((this)) - 1; ++index) {	\
-			if ((compare)(vector_get((this), index),		\
-					vector_get((this), index + 1))) {	\
-				tmp = vector_get((this), index + 1);		\
-				vector_set((this), index + 1, vector_get((this), index));\
-				vector_set((this), index, tmp);			\
-				loop = 1;					\
-			}							\
-		}								\
-	} while (loop);								\
-	}
+#define vector_cbegin(this) ((const _T(this)*)((this)->data))
+
+#define vector_end(this) ((_T(this)*)(&((this)->data[(this)->size])))
+
+#define vector_cend(this) ((const _T(this)*)(&((this)->data[(this)->size])))
+
+#define vector_clear(this) { (this)->size = 0; }
+
+#define vector_sort_2(this, function)                                         \
+{                                                                             \
+	int loop = 0;                                                         \
+	int index = 0;                                                        \
+	_T(this) tmp;                                                         \
+	do                                                                    \
+	{                                                                     \
+		loop = 0;                                                     \
+		for (index = 0; index < vector_size((this)) - 1; ++index) {   \
+			if (function(vector_get((this), index),               \
+					vector_get((this), index + 1))) {     \
+				tmp = vector_get((this), index + 1);          \
+				vector_set((this), index + 1,                 \
+						vector_get((this), index));   \
+				vector_set((this), index, tmp);               \
+				loop = 1;                                     \
+			}                                                     \
+		}                                                             \
+	} while (loop);                                                       \
+}
+
+#define vector_sort_1(this) vector_sort_2(this, __default_compare)
+
+#define vector_sort(...) VFUNC(vector_sort_, __VA_ARGS__);
+
+/*****************************************************************************/
+/* A foreach implementation for the vector_t structure.                      */
+/* Calls the compound statement "body" for every entity in the vector.       */
+/*****************************************************************************/
+#define vector_foreach(this, iter, body)                                      \
+	for (_T(this)* (iter) = vector_begin(this);                           \
+             iter != vector_end(this);	++iter)	{body;}
 
 #endif // __VECTOR_H__
